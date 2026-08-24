@@ -1,4 +1,7 @@
 import os
+
+# Use /tmp for writable database storage on Render, or local file for your PC
+DB_PATH = "/tmp/pharmacy.db" if os.environ.get("RENDER") else "pharmacy.db"
 import uuid
 import secrets
 from pathlib import Path
