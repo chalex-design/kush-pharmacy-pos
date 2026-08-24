@@ -1,0 +1,1538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kush Drug Store - POS & Stock Bin Card</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-800 antialiased min-h-screen flex flex-col font-sans">
+
+  <!-- ================= STANDALONE SECURITY LOCK SCREEN ================= -->
+  <div id="auth-lock-overlay" class="fixed inset-0 bg-slate-950 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-8 shadow-2xl space-y-6 text-center border border-slate-100">
+      <div class="flex flex-col items-center">
+        <img src="/static/logo.jpg" alt="Logo" class="h-16 w-16 rounded-full object-cover border-2 border-rose-100 shadow-sm mb-3" onerror="this.src='https://placehold.co/100x100?text=KUSH'" />
+        <h2 class="text-xl font-black text-rose-800 tracking-wide uppercase">KUSH DRUG STORE</h2>
+        <p class="text-xs text-slate-500 font-semibold mt-1">Found in Ginnir, East Bale, Ethiopia</p>
+      </div>
+
+      <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 font-medium">
+        Terminal is Locked. Enter your password to access the system.
+      </div>
+
+      <form onsubmit="handleAuthLogin(event)" class="space-y-4">
+        <div class="relative flex items-center">
+          <input 
+            type="password" 
+            id="auth-pin-input" 
+            maxlength="20" 
+            required 
+            placeholder="••••" 
+            class="w-full text-center text-2xl font-mono tracking-widest py-3 pl-8 pr-12 bg-slate-50 border-2 border-slate-300 rounded-2xl focus:outline-none focus:ring-4 focus:ring-rose-500/20 focus:border-rose-600 text-slate-900" 
+            autocomplete="current-password"
+            autofocus
+          />
+          <button 
+            type="button" 
+            onclick="togglePasswordVisibility()" 
+            id="toggle-pwd-btn"
+            title="Show/Hide Password"
+            class="absolute right-3.5 p-1.5 text-slate-400 hover:text-slate-700 focus:outline-none transition-colors"
+          >
+            <span id="pwd-eye-icon" class="text-lg select-none">👁️</span>
+          </button>
+        </div>
+        <p id="auth-error-msg" class="text-xs text-rose-600 font-bold hidden"></p>
+
+        <button 
+          type="submit" 
+          id="auth-submit-btn" 
+          class="w-full py-3.5 bg-rose-700 hover:bg-rose-800 text-white font-bold text-sm rounded-xl shadow-md hover:shadow-lg transition-all"
+        >
+          Unlock Terminal
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= AUTHENTICATED APP CONTAINER (HIDDEN UNTIL UNLOCKED) ================= -->
+  <div id="main-app-container" class="hidden flex-1 flex-col bg-slate-100 min-h-screen">
+    
+    <!-- Main Navigation Bar -->
+    <header class="bg-white border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between sticky top-0 z-20 shadow-xs">
+      <div class="flex items-center space-x-3.5">
+        <img src="/static/logo.jpg" alt="Logo" class="h-11 w-11 rounded-full object-cover border border-slate-200 shadow-xs" onerror="this.src='https://placehold.co/100x100?text=KUSH'" />
+        <div>
+          <h1 class="text-lg font-black text-rose-800 tracking-wide uppercase leading-none">KUSH DRUG STORE</h1>
+          <p class="text-[11px] text-slate-500 font-semibold mt-1">Found in Ginnir, East Bale, Ethiopia</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center space-x-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
+        <button id="tab-pos-btn" onclick="switchView('pos')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all bg-white text-slate-900 shadow-xs">
+          🛒 Cashier POS
+        </button>
+        <button id="tab-stock-btn" onclick="switchView('stock')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:text-slate-900">
+          📦 Stock & Bin Cards
+        </button>
+        <button id="tab-history-btn" onclick="switchView('history')" class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all text-slate-600 hover:text-slate-900">
+          📅 Sales & Analytics
+        </button>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <button onclick="openRestockModal()" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg shadow-xs transition-all">
+          📥 Restock / Receive
+        </button>
+        <button onclick="openAddMedicineModal()" class="px-3.5 py-2 bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs rounded-lg shadow-xs transition-all">
+          + New Medicine Profile
+        </button>
+        <button onclick="lockTerminal()" title="Lock POS Screen" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg border border-slate-200 transition-all">
+          🔒 Lock
+        </button>
+      </div>
+    </header>
+
+    <!-- VIEW 1: CASHIER POS -->
+    <main id="view-pos" class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <section class="lg:col-span-7 flex flex-col space-y-4">
+        <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200">
+          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Search Brand or Generic Name</label>
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="e.g. Amoxil, Syrup, Panadol, Saline..." 
+            class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white"
+            oninput="handleSearch()"
+          />
+        </div>
+
+        <div class="bg-white p-4 rounded-xl shadow-xs border border-slate-200 flex-1 flex flex-col">
+          <div class="flex justify-between items-center mb-3">
+            <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">Available Inventory</h2>
+            <span id="catalog-count" class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold">0 items</span>
+          </div>
+          <div id="catalog-container" class="space-y-3 overflow-y-auto max-h-[520px] pr-1"></div>
+        </div>
+      </section>
+
+      <section class="lg:col-span-5 flex flex-col">
+        <div class="bg-white rounded-xl shadow-xs border border-slate-200 flex flex-col h-full sticky top-20">
+          <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/70 rounded-t-xl">
+            <h2 class="font-bold text-slate-800 text-sm">🛒 Dispensing Cart</h2>
+            <button onclick="clearCart()" class="text-xs text-rose-500 hover:text-rose-700 font-semibold">Clear Cart</button>
+          </div>
+
+          <div id="cart-container" class="flex-1 p-4 space-y-3 overflow-y-auto min-h-[240px] max-h-[340px]">
+            <div class="h-full flex flex-col items-center justify-center text-slate-400 py-10">
+              <p class="text-3xl mb-2">🛍️</p>
+              <p class="text-sm font-medium">Cart is currently empty</p>
+            </div>
+          </div>
+
+          <div class="p-4 border-t border-slate-200 bg-slate-50 rounded-b-xl space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Payment Method</label>
+              <div class="grid grid-cols-3 gap-2">
+                <button type="button" onclick="setPaymentMethod('Cash')" id="pay-cash" class="pay-btn py-2 text-xs font-bold rounded-lg border bg-rose-700 text-white border-rose-700 shadow-xs">Cash</button>
+                <button type="button" onclick="setPaymentMethod('Telebirr')" id="pay-telebirr" class="pay-btn py-2 text-xs font-bold rounded-lg border bg-white text-slate-700 border-slate-200">Telebirr (QR)</button>
+                <button type="button" onclick="setPaymentMethod('CBE Birr')" id="pay-cbe" class="pay-btn py-2 text-xs font-bold rounded-lg border bg-white text-slate-700 border-slate-200">CBE Birr (QR)</button>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-200 flex justify-between items-baseline">
+              <span class="text-sm font-semibold text-slate-600">Total Due</span>
+              <div>
+                <span id="cart-total-display" class="text-2xl font-black text-slate-900">0.00</span>
+                <span class="text-xs text-slate-500 ml-1 font-bold">ETB</span>
+              </div>
+            </div>
+
+            <button 
+              id="checkout-btn" 
+              onclick="initiateCheckoutFlow()" 
+              class="w-full py-3.5 bg-rose-700 hover:bg-rose-800 text-white font-bold rounded-xl shadow-xs disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              disabled
+            >
+              Process & Dispense
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- VIEW 2: STOCK & DIGITAL BIN CARDS -->
+    <main id="view-stock" class="hidden flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+      <div class="flex flex-wrap justify-between items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+        <div>
+          <h2 class="text-base font-black text-slate-900">Shelf Stock & Digital Bin Card Registry</h2>
+          <p class="text-xs text-slate-500">Add deliveries to existing items, discard losses, or delete records</p>
+        </div>
+        <div class="flex space-x-2">
+          <button onclick="openRestockModal()" class="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg transition-all shadow-xs">
+            📥 Restock Delivery
+          </button>
+          <button onclick="loadStockOverview()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-all">
+            🔄 Refresh
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] tracking-wider border-b border-slate-100">
+              <tr>
+                <th class="p-3.5">Medicine Name</th>
+                <th class="p-3.5">Form</th>
+                <th class="p-3.5">Batch #</th>
+                <th class="p-3.5">Expiry Date</th>
+                <th class="p-3.5">Status</th>
+                <th class="p-3.5">Physical Breakdown</th>
+                <th class="p-3.5 text-right">Stock</th>
+                <th class="p-3.5 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="stock-overview-tbody" class="divide-y divide-slate-100 font-medium">
+              <tr><td colspan="8" class="p-8 text-center text-slate-400">Loading stock inventory...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <!-- VIEW 3: SALES & CALENDAR ANALYTICS -->
+    <main id="view-history" class="hidden flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
+      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center space-x-3">
+          <span class="text-xl">📅</span>
+          <div>
+            <h3 class="text-sm font-bold text-slate-900">Audit Calendar Filter</h3>
+            <p class="text-[11px] text-slate-500">Pick any date to review historical transactions</p>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <label for="calendar-date-picker" class="text-xs font-bold text-slate-600">Select Date:</label>
+          <input 
+            type="date" 
+            id="calendar-date-picker" 
+            class="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
+            onchange="onCalendarDateChange()"
+          />
+          <button onclick="resetToTodayDate()" class="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-lg text-xs font-bold transition-colors">
+            Today
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <p id="label-revenue-scope" class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Sales</p>
+          <p id="stat-total-revenue" class="text-2xl font-black text-rose-800 mt-1">0.00 ETB</p>
+          <p id="stat-total-orders" class="text-xs text-slate-500 mt-1">0 orders completed</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Cash</p>
+          <p id="stat-cash" class="text-2xl font-black text-slate-900 mt-1">0.00 ETB</p>
+          <p class="text-xs text-slate-500 mt-1">Physical payments</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Telebirr (QR)</p>
+          <p id="stat-telebirr" class="text-2xl font-black text-emerald-600 mt-1">0.00 ETB</p>
+          <p class="text-xs text-slate-500 mt-1">Mobile digital receipts</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+          <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">CBE Birr (QR)</p>
+          <p id="stat-cbe" class="text-2xl font-black text-purple-700 mt-1">0.00 ETB</p>
+          <p class="text-xs text-slate-500 mt-1">Acct: 1000650304369</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <div>
+            <h3 id="table-date-title" class="font-bold text-slate-900 text-sm">Transactions Log</h3>
+            <p class="text-xs text-slate-500">Kush Drug Store • Ginnir, East Bale</p>
+          </div>
+          <button onclick="loadSalesForSelectedDate()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg">
+            🔄 Refresh
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] tracking-wider border-b border-slate-100">
+              <tr>
+                <th class="p-3.5">Invoice #</th>
+                <th class="p-3.5">Date & Time</th>
+                <th class="p-3.5">Medicines Dispensed</th>
+                <th class="p-3.5">Payment Method</th>
+                <th class="p-3.5 text-right">Total (ETB)</th>
+              </tr>
+            </thead>
+            <tbody id="sales-history-tbody" class="divide-y divide-slate-100 font-medium"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- MODAL: RESTOCK -->
+  <div id="restock-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <div>
+          <h3 class="text-base font-bold text-slate-900">Restock Medicine / Receive Delivery</h3>
+          <p class="text-[11px] text-slate-500">Add quantity without re-typing profile details</p>
+        </div>
+        <button onclick="closeRestockModal()" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+
+      <form id="restock-form" onsubmit="submitQuickRestock(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-600 mb-1">Select Medicine *</label>
+          <select id="restock-med-select" onchange="onRestockMedSelection()" required class="w-full p-2.5 border rounded-lg bg-slate-50 font-bold text-slate-800"></select>
+        </div>
+
+        <div id="restock-info-banner" class="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-900 text-[11px] font-medium"></div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-600 mb-1">Batch / Lot Number *</label>
+            <input type="text" id="restock-batch-no" required placeholder="e.g. BATCH-2026B" class="w-full p-2 border rounded-lg bg-slate-50 font-mono" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-600 mb-1">Expiry Date *</label>
+            <input type="date" id="restock-exp-date" required class="w-full p-2 border rounded-lg bg-slate-50 font-mono" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label id="lbl-restock-packages" class="block font-bold text-slate-600 mb-1">Packages Received Quantity *</label>
+            <input type="number" id="restock-packages-qty" min="1" value="5" required class="w-full p-2 border rounded-lg bg-slate-50 font-bold" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-600 mb-1">Cost Price per Package (ETB) *</label>
+            <input type="number" step="0.01" id="restock-cost-pack" required placeholder="120.00" class="w-full p-2 border rounded-lg bg-slate-50" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-600 mb-1">Selling Price per Single Unit (Optional)</label>
+          <input type="number" step="0.01" id="restock-unit-price" placeholder="Leave empty to keep current price" class="w-full p-2 border rounded-lg bg-slate-50" />
+        </div>
+
+        <div class="flex space-x-3 pt-2">
+          <button type="button" onclick="closeRestockModal()" class="flex-1 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-lg">Cancel</button>
+          <button type="submit" class="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shadow-xs">Add to Stock</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: BIN CARD -->
+  <div id="bincard-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+      <div class="flex justify-between items-start border-b pb-3">
+        <div>
+          <span class="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 bg-rose-100 text-rose-800 rounded-md">Official Pharmacy Bin Card</span>
+          <h3 id="bincard-med-name" class="text-xl font-black text-slate-900 mt-1"></h3>
+          <p id="bincard-meta" class="text-xs text-slate-500 font-mono mt-0.5"></p>
+        </div>
+        <button onclick="closeBinCardModal()" class="text-slate-400 hover:text-slate-700 font-bold text-xl">✕</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto pr-1">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 text-slate-500 uppercase font-bold text-[10px] tracking-wider border-b border-slate-100 sticky top-0">
+            <tr>
+              <th class="p-2.5">Date & Time</th>
+              <th class="p-2.5">Doc Ref / Invoice</th>
+              <th class="p-2.5">Movement</th>
+              <th class="p-2.5 text-emerald-700">IN</th>
+              <th class="p-2.5 text-rose-700">OUT</th>
+              <th class="p-2.5 font-bold">Balance</th>
+              <th class="p-2.5">Remarks</th>
+            </tr>
+          </thead>
+          <tbody id="bincard-entries-tbody" class="divide-y divide-slate-100 font-medium"></tbody>
+        </table>
+      </div>
+
+      <div class="border-t pt-3 flex justify-between items-center">
+        <div class="text-xs text-slate-500">
+          Current Balance: <span id="bincard-current-bal" class="font-black text-slate-900 text-sm"></span>
+        </div>
+        <div class="flex space-x-2">
+          <button onclick="closeBinCardModal()" class="px-4 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg">Close</button>
+          <button onclick="window.print()" class="px-4 py-2 bg-rose-700 text-white font-bold text-xs rounded-lg shadow-xs">🖨️ Print Bin Card</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LOSS -->
+  <div id="loss-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="text-base font-bold text-slate-900">Record Loss / Discard</h3>
+        <button onclick="closeLossModal()" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+
+      <p id="loss-modal-title" class="text-xs font-semibold text-rose-800"></p>
+      <input type="hidden" id="loss-batch-id" />
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label id="loss-qty-label" class="block font-bold text-slate-600 mb-1">Quantity to Deduct *</label>
+          <input type="number" id="loss-qty" min="1" required placeholder="e.g. 5" class="w-full p-2 border rounded-lg bg-slate-50 font-bold" />
+        </div>
+        <div>
+          <label class="block font-bold text-slate-600 mb-1">Reason *</label>
+          <select id="loss-reason" class="w-full p-2 border rounded-lg bg-slate-50 font-medium">
+            <option value="Damage / Broken">Damaged Bottle / Blister Pack</option>
+            <option value="Expired Discard">Expired Stock Discard</option>
+            <option value="Audit Adjustment">Physical Audit Discrepancy</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-600 mb-1">Remarks / Note</label>
+          <input type="text" id="loss-remarks" placeholder="Optional audit note" class="w-full p-2 border rounded-lg bg-slate-50" />
+        </div>
+      </div>
+
+      <div class="flex space-x-3 pt-2">
+        <button onclick="closeLossModal()" class="flex-1 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg">Cancel</button>
+        <button onclick="submitStockLoss()" class="flex-1 py-2 bg-rose-700 text-white font-bold text-xs rounded-lg shadow-xs">Deduct & Log</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: QR PAYMENT -->
+  <div id="qr-payment-modal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl space-y-4 text-center">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 id="qr-modal-title" class="font-extrabold text-slate-900 text-base">Digital Payment</h3>
+        <button onclick="closeQrPaymentModal()" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+      <p class="text-xs text-slate-500">Scan QR Code using Mobile App:</p>
+      <div class="p-4 bg-white border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center">
+        <div id="dynamic-qr-target" class="p-2 bg-white rounded-lg shadow-inner"></div>
+        <p id="qr-merchant-tag" class="text-[11px] font-mono font-bold text-slate-600 mt-2"></p>
+      </div>
+      <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+        <p class="text-xs text-slate-500 font-semibold uppercase">Exact Amount Due</p>
+        <p id="qr-amount-display" class="text-2xl font-black text-slate-900">0.00 ETB</p>
+      </div>
+      <div class="text-left space-y-1">
+        <label class="text-[11px] font-bold text-slate-600">SMS / Reference ID (Optional):</label>
+        <input type="text" id="qr-tx-ref-input" placeholder="e.g. FT2623490182" class="w-full p-2.5 text-xs bg-slate-50 border rounded-lg font-mono focus:outline-none focus:ring-2 focus:ring-rose-500" />
+      </div>
+      <button onclick="confirmDigitalPayment()" class="w-full py-3 bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all">
+        ✓ Confirm Payment Received & Dispense
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: RECEIPT -->
+  <div id="receipt-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+      <div class="text-center">
+        <img src="/static/logo.jpg" alt="Logo" class="h-14 w-14 rounded-full mx-auto mb-2 object-cover border border-slate-200 shadow-xs" onerror="this.src='https://placehold.co/100x100?text=KUSH'" />
+        <h3 class="text-lg font-black text-rose-800 leading-none">KUSH DRUG STORE</h3>
+        <p class="text-[11px] text-slate-500 font-semibold mt-1">Found in Ginnir, East Bale, Ethiopia</p>
+        <p id="receipt-modal-inv" class="text-xs text-slate-400 font-mono mt-1.5"></p>
+      </div>
+      <div class="border-t border-b border-slate-100 py-3 space-y-2 text-sm">
+        <div class="flex justify-between text-slate-600">
+          <span>Amount Paid:</span>
+          <span id="receipt-modal-total" class="font-black text-slate-900"></span>
+        </div>
+        <div class="flex justify-between text-slate-600">
+          <span>Payment Channel:</span>
+          <span id="receipt-modal-method" class="font-semibold text-slate-800"></span>
+        </div>
+      </div>
+      <div class="flex space-x-3">
+        <button onclick="closeReceiptModal()" class="flex-1 py-2.5 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg">Close</button>
+        <button onclick="window.print()" class="flex-1 py-2.5 bg-rose-700 hover:bg-rose-800 text-white text-sm font-semibold rounded-lg shadow-xs">Print Receipt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NEW MEDICINE -->
+  <div id="add-med-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-3">
+        <div>
+          <h3 class="text-lg font-bold text-slate-900">Create New Medicine Profile</h3>
+          <p class="text-xs text-slate-500">Configure packaging for a brand you haven't stocked before</p>
+        </div>
+        <button onclick="closeAddMedicineModal()" class="text-slate-400 hover:text-slate-700 font-bold text-lg">✕</button>
+      </div>
+
+      <form id="add-med-form" onsubmit="submitNewMedicine(event)" class="space-y-3.5 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-600 mb-1">Brand Name *</label>
+            <input type="text" id="new-brand" required placeholder="e.g. Amoxil, Ventolin..." class="w-full p-2 border rounded-lg bg-slate-50" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-600 mb-1">Generic Name</label>
+            <input type="text" id="new-generic" placeholder="e.g. Amoxicillin Trihydrate" class="w-full p-2 border rounded-lg bg-slate-50" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-1">
+            <label class="block font-bold text-slate-600 mb-1">Dosage Form *</label>
+            <select id="new-form" onchange="onDosageFormChange()" class="w-full p-2 border rounded-lg bg-slate-50 font-bold text-slate-800">
+              <option value="Tablet">Tablet</option>
+              <option value="Capsule">Capsule</option>
+              <option value="Syrup">Syrup / Suspension</option>
+              <option value="Injection">Injection / Ampoule</option>
+              <option value="Ointment">Cream / Ointment</option>
+              <option value="Drops">Eye / Ear Drops</option>
+              <option value="IV Fluid">IV Infusion Fluid</option>
+              <option value="Inhaler">Inhaler / Spray</option>
+            </select>
+          </div>
+          <div class="col-span-1">
+            <label class="block font-bold text-slate-600 mb-1">Dispensing Unit</label>
+            <input type="text" id="new-dispense-unit" value="Tablet" required class="w-full p-2 border rounded-lg bg-slate-100 font-bold text-slate-700" />
+          </div>
+          <div class="col-span-1">
+            <label class="block font-bold text-slate-600 mb-1">Strength / Volume</label>
+            <input type="text" id="new-dosage" placeholder="e.g. 500mg, 100mL" class="w-full p-2 border rounded-lg bg-slate-50" />
+          </div>
+        </div>
+
+        <div id="packaging-sub-box" class="grid grid-cols-2 gap-3 bg-rose-50/50 p-3 rounded-xl border border-rose-100">
+          <div>
+            <label id="lbl-subpack-units" class="block font-bold text-rose-900 mb-1">Units per Strip / Sub-pack</label>
+            <input type="number" id="new-subpack-units" value="10" min="1" required class="w-full p-2 border rounded-lg bg-white" />
+          </div>
+          <div>
+            <label id="lbl-outerpack-subs" class="block font-bold text-rose-900 mb-1">Strips / Sub-packs per Box</label>
+            <input type="number" id="new-outerpack-subs" value="10" min="1" required class="w-full p-2 border rounded-lg bg-white" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-600 mb-1">Batch / Lot Number *</label>
+            <input type="text" id="new-batch-no" required placeholder="e.g. BATCH-2026A" class="w-full p-2 border rounded-lg bg-slate-50 font-mono" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-600 mb-1">Expiry Date *</label>
+            <input type="date" id="new-exp-date" required class="w-full p-2 border rounded-lg bg-slate-50 font-mono" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label id="lbl-packages-received" class="block font-bold text-slate-600 mb-1">Packages Received Quantity *</label>
+            <input type="number" id="new-packages-received" min="1" value="5" required class="w-full p-2 border rounded-lg bg-slate-50 font-bold" />
+          </div>
+          <div>
+            <label id="lbl-cost-package" class="block font-bold text-slate-600 mb-1">Cost Price per Package (ETB) *</label>
+            <input type="number" step="0.01" id="new-package-cost" required placeholder="120.00" class="w-full p-2 border rounded-lg bg-slate-50" />
+          </div>
+        </div>
+
+        <div class="border-t pt-2">
+          <label id="lbl-selling-unit-price" class="block font-bold text-rose-800 mb-1">Selling Price per Single Unit (ETB) *</label>
+          <input type="number" step="0.01" id="new-unit-price" required placeholder="3.00" class="w-full p-2.5 border rounded-lg bg-rose-50/40 font-bold text-rose-900 text-sm" />
+        </div>
+
+        <div class="flex space-x-3 pt-3">
+          <button type="button" onclick="closeAddMedicineModal()" class="flex-1 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-lg">Cancel</button>
+          <button type="submit" class="flex-1 py-2.5 bg-rose-700 text-white font-bold rounded-lg shadow-xs hover:bg-rose-800">Save to Inventory</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT PRICE -->
+  <div id="edit-price-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="text-base font-bold text-slate-900">Update Selling Prices</h3>
+        <button onclick="closeEditPriceModal()" class="text-slate-400 hover:text-slate-700 font-bold">✕</button>
+      </div>
+      <p id="edit-med-title" class="text-xs font-semibold text-rose-800"></p>
+      <input type="hidden" id="edit-batch-id" />
+      <div class="space-y-3 text-xs">
+        <div>
+          <label id="edit-price-single-lbl" class="block font-bold text-slate-600 mb-1">Price per Single Unit (ETB) *</label>
+          <input type="number" step="0.01" id="edit-price-unit" class="w-full p-2 border rounded-lg bg-slate-50 font-bold" />
+        </div>
+        <div id="edit-strip-row">
+          <label class="block font-bold text-slate-600 mb-1">Price per Strip / Sub-pack (ETB)</label>
+          <input type="number" step="0.01" id="edit-price-strip" placeholder="Auto-calculated if empty" class="w-full p-2 border rounded-lg bg-slate-50" />
+        </div>
+        <div id="edit-pack-row">
+          <label class="block font-bold text-slate-600 mb-1">Price per Full Outer Pack (ETB)</label>
+          <input type="number" step="0.01" id="edit-price-pack" placeholder="Auto-calculated if empty" class="w-full p-2 border rounded-lg bg-slate-50" />
+        </div>
+      </div>
+      <div class="flex space-x-3 pt-2">
+        <button onclick="closeEditPriceModal()" class="flex-1 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg">Cancel</button>
+        <button onclick="savePriceChanges()" class="flex-1 py-2 bg-rose-700 text-white font-bold text-xs rounded-lg">Update Price</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const MERCHANT_CONFIG = {
+      telebirr_code: "TELE-KUSH-001",
+      cbe_account: "1000650304369"
+    };
+
+    let catalog = [];
+    let cart = [];
+    let currentPaymentMethod = "Cash";
+    let qrcodeInstance = null;
+    let currentAuthToken = localStorage.getItem("kush_pos_token") || null;
+
+    document.addEventListener("DOMContentLoaded", () => {
+      initAuthStatus();
+      initCalendarDefault();
+    });
+
+    // --- SECURITY & AUTHENTICATION HANDLERS ---
+    function initAuthStatus() {
+      const lockOverlay = document.getElementById("auth-lock-overlay");
+      const mainApp = document.getElementById("main-app-container");
+
+      if (!currentAuthToken) {
+        mainApp.classList.add("hidden");
+        mainApp.classList.remove("flex");
+        lockOverlay.classList.remove("hidden");
+        document.getElementById("auth-pin-input").focus();
+      } else {
+        lockOverlay.classList.add("hidden");
+        mainApp.classList.remove("hidden");
+        mainApp.classList.add("flex");
+        loadMedicines();
+      }
+    }
+
+    function togglePasswordVisibility() {
+      const pinInput = document.getElementById("auth-pin-input");
+      const icon = document.getElementById("pwd-eye-icon");
+      if (pinInput.type === "password") {
+        pinInput.type = "text";
+        icon.innerText = "🙈";
+      } else {
+        pinInput.type = "password";
+        icon.innerText = "👁️";
+      }
+      pinInput.focus();
+    }
+
+    async function handleAuthLogin(e) {
+      e.preventDefault();
+      const pin = document.getElementById("auth-pin-input").value;
+      const errorMsg = document.getElementById("auth-error-msg");
+      const btn = document.getElementById("auth-submit-btn");
+
+      errorMsg.classList.add("hidden");
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin: pin })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          currentAuthToken = data.token;
+          localStorage.setItem("kush_pos_token", currentAuthToken);
+          
+          document.getElementById("auth-lock-overlay").classList.add("hidden");
+          const mainApp = document.getElementById("main-app-container");
+          mainApp.classList.remove("hidden");
+          mainApp.classList.add("flex");
+
+          document.getElementById("auth-pin-input").value = "";
+          loadMedicines();
+        } else {
+          errorMsg.innerText = "Incorrect PIN. Access Denied.";
+          errorMsg.classList.remove("hidden");
+          document.getElementById("auth-pin-input").value = "";
+          document.getElementById("auth-pin-input").focus();
+        }
+      } catch (err) {
+        errorMsg.innerText = "Connection error. Ensure server is active.";
+        errorMsg.classList.remove("hidden");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function lockTerminal() {
+      if (currentAuthToken) {
+        try {
+          await fetch("/api/auth/logout", {
+            method: "POST",
+            headers: { "x-auth-token": currentAuthToken }
+          });
+        } catch (e) {}
+      }
+      currentAuthToken = null;
+      localStorage.removeItem("kush_pos_token");
+
+      const mainApp = document.getElementById("main-app-container");
+      mainApp.classList.add("hidden");
+      mainApp.classList.remove("flex");
+
+      // Reset password field to masked type
+      const pinInput = document.getElementById("auth-pin-input");
+      pinInput.type = "password";
+      document.getElementById("pwd-eye-icon").innerText = "👁️";
+
+      document.getElementById("auth-lock-overlay").classList.remove("hidden");
+      pinInput.value = "";
+      pinInput.focus();
+    }
+
+    function getAuthHeaders() {
+      return {
+        "Content-Type": "application/json",
+        "x-auth-token": currentAuthToken || ""
+      };
+    }
+
+    function checkAuthError(status) {
+      if (status === 401) {
+        alert("Session expired or unauthorized. Please re-enter your PIN.");
+        lockTerminal();
+        return true;
+      }
+      return false;
+    }
+
+    function initCalendarDefault() {
+      const todayStr = new Date().toISOString().split('T')[0];
+      document.getElementById("calendar-date-picker").value = todayStr;
+    }
+
+    function onDosageFormChange() {
+      const formVal = document.getElementById("new-form").value;
+      const unitInput = document.getElementById("new-dispense-unit");
+      const subBox = document.getElementById("packaging-sub-box");
+      const subUnits = document.getElementById("new-subpack-units");
+      const outerSubs = document.getElementById("new-outerpack-subs");
+      const lblPkgReceived = document.getElementById("lbl-packages-received");
+      const lblPkgCost = document.getElementById("lbl-cost-package");
+      const lblUnitPrice = document.getElementById("lbl-selling-unit-price");
+
+      if (formVal === "Tablet") {
+        unitInput.value = "Tablet";
+        subBox.classList.remove("hidden");
+        subUnits.value = "10";
+        outerSubs.value = "10";
+        lblPkgReceived.innerText = "Boxes Received Quantity *";
+        lblPkgCost.innerText = "Cost Price per Box (ETB) *";
+        lblUnitPrice.innerText = "Selling Price per Single Tablet (ETB) *";
+      } else if (formVal === "Capsule") {
+        unitInput.value = "Capsule";
+        subBox.classList.remove("hidden");
+        subUnits.value = "10";
+        outerSubs.value = "10";
+        lblPkgReceived.innerText = "Boxes Received Quantity *";
+        lblPkgCost.innerText = "Cost Price per Box (ETB) *";
+        lblUnitPrice.innerText = "Selling Price per Single Capsule (ETB) *";
+      } else if (formVal === "Syrup") {
+        unitInput.value = "Bottle";
+        subBox.classList.add("hidden");
+        subUnits.value = "1";
+        outerSubs.value = "1";
+        lblPkgReceived.innerText = "Bottles Received Quantity *";
+        lblPkgCost.innerText = "Cost Price per Bottle (ETB) *";
+        lblUnitPrice.innerText = "Selling Price per Bottle (ETB) *";
+      } else if (formVal === "Ointment") {
+        unitInput.value = "Tube";
+        subBox.classList.add("hidden");
+        subUnits.value = "1";
+        outerSubs.value = "1";
+        lblPkgReceived.innerText = "Tubes Received Quantity *";
+        lblPkgCost.innerText = "Cost Price per Tube (ETB) *";
+        lblUnitPrice.innerText = "Selling Price per Tube (ETB) *";
+      } else if (formVal === "Drops") {
+        unitInput.value = "Bottle";
+        subBox.classList.add("hidden");
+        subUnits.value = "1";
+        outerSubs.value = "1";
+        lblPkgReceived.innerText = "Dropper Bottles Received *";
+        lblPkgCost.innerText = "Cost Price per Bottle (ETB) *";
+        lblUnitPrice.innerText = "Selling Price per Bottle (ETB) *";
+      } else if (formVal === "Injection") {
+        unitInput.value = "Ampoule";
+        subBox.classList.remove("hidden");
+        subUnits.value = "5";
+        outerSubs.value = "10";
+        lblPkgReceived.innerText = "Boxes / Packs Received *";
+        lblPkgCost.innerText = "Cost Price per Box (ETB) *";
+        lblUnitPrice.innerText = "Selling Price per Single Ampoule (ETB) *";
+      } else if (formVal === "IV Fluid") {
+        unitInput.value = "Bag";
+        subBox.classList.remove("hidden");
+        subUnits.value = "1";
+        outerSubs.value = "20";
+        lblPkgReceived.innerText = "Cartons Received Quantity *";
+        lblPkgCost.innerText = "Cost Price per Carton (ETB) *";
+        lblUnitPrice.innerText = "Selling Price per Single IV Bag (ETB) *";
+      } else {
+        unitInput.value = "Unit";
+        subBox.classList.add("hidden");
+        subUnits.value = "1";
+        outerSubs.value = "1";
+        lblPkgReceived.innerText = "Quantity Received *";
+        lblPkgCost.innerText = "Cost Price per Unit (ETB) *";
+        lblUnitPrice.innerText = "Selling Price per Unit (ETB) *";
+      }
+    }
+
+    function switchView(view) {
+      const posView = document.getElementById("view-pos");
+      const stockView = document.getElementById("view-stock");
+      const historyView = document.getElementById("view-history");
+
+      const posBtn = document.getElementById("tab-pos-btn");
+      const stockBtn = document.getElementById("tab-stock-btn");
+      const historyBtn = document.getElementById("tab-history-btn");
+
+      [posView, stockView, historyView].forEach(v => v.classList.add("hidden"));
+      [posBtn, stockBtn, historyBtn].forEach(b => {
+        b.classList.remove("bg-white", "text-slate-900", "shadow-xs");
+        b.classList.add("text-slate-600");
+      });
+
+      if (view === 'pos') {
+        posView.classList.remove("hidden");
+        posBtn.classList.add("bg-white", "text-slate-900", "shadow-xs");
+        posBtn.classList.remove("text-slate-600");
+        loadMedicines();
+      } else if (view === 'stock') {
+        stockView.classList.remove("hidden");
+        stockBtn.classList.add("bg-white", "text-slate-900", "shadow-xs");
+        stockBtn.classList.remove("text-slate-600");
+        loadStockOverview();
+      } else if (view === 'history') {
+        historyView.classList.remove("hidden");
+        historyBtn.classList.add("bg-white", "text-slate-900", "shadow-xs");
+        historyBtn.classList.remove("text-slate-600");
+        loadSalesForSelectedDate();
+      }
+    }
+
+    async function openRestockModal(preselectedMedId = null) {
+      const select = document.getElementById("restock-med-select");
+      select.innerHTML = `<option value="">-- Choose Medicine --</option>`;
+
+      try {
+        const res = await fetch("/api/medicines");
+        const list = await res.json();
+        
+        list.forEach(m => {
+          const opt = document.createElement("option");
+          opt.value = m.id;
+          opt.textContent = `${m.brand_name} (${m.dosage_form} - ${m.dosage || 'N/A'})`;
+          select.appendChild(opt);
+        });
+
+        if (preselectedMedId) {
+          select.value = preselectedMedId;
+        }
+
+        onRestockMedSelection();
+
+        document.getElementById("restock-modal").classList.remove("hidden");
+        document.getElementById("restock-modal").classList.add("flex");
+      } catch (err) {
+        alert("Failed to load medicine list.");
+      }
+    }
+
+    function closeRestockModal() {
+      document.getElementById("restock-modal").classList.add("hidden");
+      document.getElementById("restock-modal").classList.remove("flex");
+    }
+
+    function onRestockMedSelection() {
+      const medId = parseInt(document.getElementById("restock-med-select").value);
+      const banner = document.getElementById("restock-info-banner");
+      const lblPkg = document.getElementById("lbl-restock-packages");
+
+      if (!medId) {
+        banner.innerHTML = "Please select a medicine above to see packaging structure.";
+        return;
+      }
+
+      const med = catalog.find(m => m.id === medId);
+      if (med) {
+        const totalPerPack = med.units_per_strip * med.strips_per_box;
+        banner.innerHTML = `<strong>${med.brand_name}</strong> • ${med.dosage_form} | Package: <strong>${totalPerPack} ${med.dispense_unit.toLowerCase()}s</strong> per pack.`;
+        lblPkg.innerText = `Packages (${med.dosage_form === 'Tablet' ? 'Boxes' : 'Packs'}) Received *`;
+      }
+    }
+
+    async function submitQuickRestock(e) {
+      e.preventDefault();
+      const medId = parseInt(document.getElementById("restock-med-select").value);
+      const batchNo = document.getElementById("restock-batch-no").value.trim();
+      const expDate = document.getElementById("restock-exp-date").value;
+      const pkgQty = parseInt(document.getElementById("restock-packages-qty").value) || 1;
+      const costPack = parseFloat(document.getElementById("restock-cost-pack").value) || 0;
+      const unitPriceVal = document.getElementById("restock-unit-price").value;
+
+      const payload = {
+        medicine_id: medId,
+        batch_number: batchNo,
+        expiry_date: expDate,
+        packages_received: pkgQty,
+        cost_price_package: costPack,
+        price_per_dispense_unit: unitPriceVal ? parseFloat(unitPriceVal) : null,
+        remarks: "New Delivery Restock"
+      };
+
+      try {
+        const res = await fetch("/api/stock/restock", {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload)
+        });
+
+        if (checkAuthError(res.status)) return;
+
+        if (res.ok) {
+          closeRestockModal();
+          document.getElementById("restock-form").reset();
+          loadMedicines();
+          loadStockOverview();
+          alert("Stock added and Bin Card updated successfully!");
+        } else {
+          const err = await res.json();
+          alert(`Restock failed: ${err.detail || 'Error'}`);
+        }
+      } catch (err) {
+        alert(`Network Error: ${err.message}`);
+      }
+    }
+
+    async function deleteStockBatch(batchId, brandName, batchNumber) {
+      if (!confirm(`Are you sure you want to delete Batch "${batchNumber}" of ${brandName}? This will remove its Bin Card history.`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/batches/${batchId}`, {
+          method: "DELETE",
+          headers: getAuthHeaders()
+        });
+
+        if (checkAuthError(res.status)) return;
+
+        if (res.ok) {
+          loadStockOverview();
+          loadMedicines();
+          alert("Batch deleted successfully.");
+        } else {
+          const err = await res.json();
+          alert(`Delete failed: ${err.detail || 'Error'}`);
+        }
+      } catch (err) {
+        alert(`Network Error: ${err.message}`);
+      }
+    }
+
+    async function loadStockOverview() {
+      const tbody = document.getElementById("stock-overview-tbody");
+      try {
+        const res = await fetch("/api/stock/overview");
+        const items = await res.json();
+
+        if (!items || items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-400">No stock batches found.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = items.map(item => {
+          let badge = `<span class="px-2 py-0.5 rounded-full font-bold text-[10px] bg-emerald-100 text-emerald-800">Safe (${item.days_to_expiry}d)</span>`;
+          if (item.expiry_status === 'NEAR_EXPIRY') {
+            badge = `<span class="px-2 py-0.5 rounded-full font-bold text-[10px] bg-amber-100 text-amber-800 animate-pulse">Near Expiry (${item.days_to_expiry}d)</span>`;
+          } else if (item.expiry_status === 'EXPIRED') {
+            badge = `<span class="px-2 py-0.5 rounded-full font-bold text-[10px] bg-rose-100 text-rose-800">Expired</span>`;
+          }
+
+          return `
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="p-3.5">
+                <p class="font-bold text-slate-900">${item.brand_name}</p>
+                <p class="text-[11px] text-slate-500">${item.generic_name} • ${item.dosage}</p>
+              </td>
+              <td class="p-3.5 font-semibold text-slate-600">${item.dosage_form}</td>
+              <td class="p-3.5 font-mono font-bold text-slate-700">${item.batch_number}</td>
+              <td class="p-3.5 font-mono text-slate-600">${item.expiry_date}</td>
+              <td class="p-3.5">${badge}</td>
+              <td class="p-3.5 text-slate-600">${item.breakdown}</td>
+              <td class="p-3.5 text-right font-black text-slate-900 text-sm">
+                ${item.total_units > 0 
+                  ? `${item.total_units} <span class="text-[10px] font-normal text-slate-500">${item.dispense_unit.toLowerCase()}s</span>` 
+                  : `<span class="text-rose-600 font-bold">0 (Out of stock)</span>`}
+              </td>
+              <td class="p-3.5 text-center space-x-1.5 whitespace-nowrap">
+                <button onclick="openRestockModal(${item.medicine_id})" title="Add stock delivery" class="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[11px] rounded-lg">
+                  + Add Stock
+                </button>
+                <button onclick="openBinCardModal(${item.batch_id})" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg">
+                  📋 Bin Card
+                </button>
+                <button onclick="openLossModal(${item.batch_id}, '${item.brand_name}', ${item.total_units}, '${item.dispense_unit}')" class="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-[11px] rounded-lg">
+                  ⚠️ Loss
+                </button>
+                <button onclick="deleteStockBatch(${item.batch_id}, '${item.brand_name}', '${item.batch_number}')" title="Delete Batch" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] rounded-lg">
+                  🗑️
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-rose-500">Failed to load stock overview.</td></tr>`;
+      }
+    }
+
+    async function openBinCardModal(batchId) {
+      try {
+        const res = await fetch(`/api/stock/bincard/${batchId}`);
+        const data = await res.json();
+
+        document.getElementById("bincard-med-name").innerText = `${data.medicine_name} (${data.dosage_form})`;
+        document.getElementById("bincard-meta").innerText = `Batch: ${data.batch_number} | Expiry: ${data.expiry_date} | Units: ${data.dispense_unit}s`;
+        document.getElementById("bincard-current-bal").innerText = `${data.current_stock} ${data.dispense_unit}s`;
+
+        const tbody = document.getElementById("bincard-entries-tbody");
+        if (!data.entries || data.entries.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">No ledger entries recorded yet.</td></tr>`;
+        } else {
+          tbody.innerHTML = data.entries.map(e => `
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="p-2.5 font-mono text-slate-500 text-[11px]">${e.date}</td>
+              <td class="p-2.5 font-mono font-bold text-slate-800">${e.reference_doc}</td>
+              <td class="p-2.5 font-bold text-[11px]">${e.movement_type}</td>
+              <td class="p-2.5 font-bold text-emerald-700">${e.quantity_in > 0 ? '+' + e.quantity_in : '-'}</td>
+              <td class="p-2.5 font-bold text-rose-700">${e.quantity_out > 0 ? '-' + e.quantity_out : '-'}</td>
+              <td class="p-2.5 font-black text-slate-900">${e.running_balance}</td>
+              <td class="p-2.5 text-slate-500 text-[11px]">${e.remarks}</td>
+            </tr>
+          `).join('');
+        }
+
+        document.getElementById("bincard-modal").classList.remove("hidden");
+        document.getElementById("bincard-modal").classList.add("flex");
+      } catch (err) {
+        alert("Failed to load Bin Card ledger.");
+      }
+    }
+
+    function closeBinCardModal() {
+      document.getElementById("bincard-modal").classList.add("hidden");
+      document.getElementById("bincard-modal").classList.remove("flex");
+    }
+
+    function openLossModal(batchId, name, currentUnits, unitName) {
+      document.getElementById("loss-batch-id").value = batchId;
+      document.getElementById("loss-modal-title").innerText = `${name} (Current Stock: ${currentUnits} ${unitName.toLowerCase()}s)`;
+      document.getElementById("loss-qty-label").innerText = `Quantity to Deduct (${unitName}s) *`;
+      document.getElementById("loss-qty").value = "";
+      document.getElementById("loss-remarks").value = "";
+
+      document.getElementById("loss-modal").classList.remove("hidden");
+      document.getElementById("loss-modal").classList.add("flex");
+    }
+
+    function closeLossModal() {
+      document.getElementById("loss-modal").classList.add("hidden");
+      document.getElementById("loss-modal").classList.remove("flex");
+    }
+
+    async function submitStockLoss() {
+      const batchId = parseInt(document.getElementById("loss-batch-id").value);
+      const qty = parseInt(document.getElementById("loss-qty").value);
+      const reason = document.getElementById("loss-reason").value;
+      const remarks = document.getElementById("loss-remarks").value;
+
+      if (!qty || qty <= 0) {
+        alert("Please enter a valid quantity.");
+        return;
+      }
+
+      const res = await fetch("/api/stock/adjust", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ batch_id: batchId, adjustment_units: qty, reason: reason, remarks: remarks })
+      });
+
+      if (checkAuthError(res.status)) return;
+
+      if (res.ok) {
+        closeLossModal();
+        loadStockOverview();
+      } else {
+        const err = await res.json();
+        alert(`Adjustment failed: ${err.detail || 'Error'}`);
+      }
+    }
+
+    async function loadMedicines(search = "") {
+      try {
+        const response = await fetch(`/api/medicines?search=${encodeURIComponent(search)}`);
+        catalog = await response.json();
+        renderCatalog(catalog);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function handleSearch() { loadMedicines(document.getElementById("search-input").value); }
+
+    function renderCatalog(items) {
+      const container = document.getElementById("catalog-container");
+      document.getElementById("catalog-count").innerText = `${items.length} items`;
+
+      if (!items || items.length === 0) {
+        container.innerHTML = `<div class="p-8 text-center text-slate-400"><p class="text-sm">No inventory items found.</p></div>`;
+        return;
+      }
+
+      container.innerHTML = items.map(med => {
+        const batch = med.batches && med.batches.length > 0 ? med.batches[0] : null;
+        const stockCount = batch ? batch.stock_in_base_units : 0;
+        const isOutOfStock = stockCount <= 0;
+
+        let unitOptions = `<option value="single">Single ${med.dispense_unit}</option>`;
+        if (med.units_per_strip > 1) {
+          unitOptions += `<option value="strip">Strip / Subpack (${med.units_per_strip} ${med.dispense_unit.toLowerCase()}s)</option>`;
+        }
+        if (med.strips_per_box > 1 || (med.units_per_strip > 1 && med.strips_per_box >= 1)) {
+          const totalInPack = med.units_per_strip * med.strips_per_box;
+          unitOptions += `<option value="pack">Full Outer Pack (${totalInPack} ${med.dispense_unit.toLowerCase()}s)</option>`;
+        }
+
+        return `
+          <div class="p-3.5 border border-slate-200 rounded-xl bg-white flex items-center justify-between hover:border-slate-300 transition-all shadow-xs">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-900 text-sm">${med.brand_name}</span>
+                <span class="text-xs bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">${med.dosage || ''}</span>
+                ${batch ? `
+                  <button onclick="openEditPriceModal(${batch.id}, '${med.brand_name}', ${batch.price_per_unit}, ${batch.price_per_strip || 0}, ${batch.price_per_pack || 0}, '${med.dispense_unit}', ${med.units_per_strip > 1})" 
+                          class="text-[11px] text-rose-700 hover:text-rose-900 underline font-semibold ml-1">
+                    ✏️ Price (${batch.price_per_unit.toFixed(2)} ETB/${med.dispense_unit.toLowerCase()})
+                  </button>
+                ` : ''}
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">${med.generic_name || ''} • <span class="font-semibold text-slate-700">${med.dosage_form}</span></p>
+              <div class="flex items-center space-x-3 mt-1 text-xs">
+                <span class="font-semibold ${isOutOfStock ? 'text-rose-600 font-bold' : 'text-emerald-700'}">
+                  ${isOutOfStock ? 'Out of stock (0)' : `Available: ${stockCount} ${med.dispense_unit.toLowerCase()}s`}
+                </span>
+                ${batch ? `<span class="text-slate-400 font-mono">Exp: ${batch.expiry_date}</span>` : ''}
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <select id="unit-select-${med.id}" class="text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 font-medium">
+                ${unitOptions}
+              </select>
+
+              <button 
+                onclick="addToCart(${med.id}, ${batch ? batch.id : null})" 
+                class="px-3 py-2 bg-rose-700 hover:bg-rose-800 text-white font-bold text-xs rounded-lg disabled:opacity-40 transition-colors"
+                ${isOutOfStock || !batch ? 'disabled' : ''}
+              >
+                + Add
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function addToCart(medId, batchId) {
+      if (!batchId) return;
+      const med = catalog.find(m => m.id === medId);
+      const batch = med.batches.find(b => b.id === batchId);
+      const unit = document.getElementById(`unit-select-${medId}`).value;
+
+      let price = batch.price_per_unit;
+      let displayUnitName = med.dispense_unit;
+
+      if (unit === 'strip') {
+        price = batch.price_per_strip || (batch.price_per_unit * med.units_per_strip);
+        displayUnitName = `Strip (${med.units_per_strip} ${med.dispense_unit.toLowerCase()}s)`;
+      } else if (unit === 'pack') {
+        const totalInPack = med.units_per_strip * med.strips_per_box;
+        price = batch.price_per_pack || (batch.price_per_unit * totalInPack);
+        displayUnitName = `Outer Pack (${totalInPack} ${med.dispense_unit.toLowerCase()}s)`;
+      }
+
+      const existing = cart.find(i => i.batch_id === batchId && i.unit_type === unit);
+      if (existing) {
+        existing.quantity += 1;
+        existing.subtotal = existing.quantity * existing.unit_price;
+      } else {
+        cart.push({
+          batch_id: batchId,
+          medicine_name: med.brand_name,
+          unit_type: unit,
+          display_unit: displayUnitName,
+          unit_price: price,
+          quantity: 1,
+          subtotal: price
+        });
+      }
+      renderCart();
+    }
+
+    function updateCartItemQty(index, delta) {
+      cart[index].quantity += delta;
+      if (cart[index].quantity <= 0) cart.splice(index, 1);
+      else cart[index].subtotal = cart[index].quantity * cart[index].unit_price;
+      renderCart();
+    }
+
+    function setCartItemQtyDirect(index, value) {
+      let parsed = parseInt(value);
+      if (isNaN(parsed) || parsed <= 0) {
+        parsed = 1;
+      }
+      cart[index].quantity = parsed;
+      cart[index].subtotal = cart[index].quantity * cart[index].unit_price;
+      renderCart();
+    }
+
+    function clearCart() { cart = []; renderCart(); }
+
+    function getCartTotal() { return cart.reduce((acc, item) => acc + item.subtotal, 0); }
+
+    function renderCart() {
+      const container = document.getElementById("cart-container");
+      const checkoutBtn = document.getElementById("checkout-btn");
+
+      if (cart.length === 0) {
+        container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-400 py-10"><p class="text-3xl mb-2">🛍️</p><p class="text-sm font-medium">Cart is currently empty</p></div>`;
+        document.getElementById("cart-total-display").innerText = "0.00";
+        checkoutBtn.disabled = true;
+        return;
+      }
+
+      const total = getCartTotal();
+      container.innerHTML = cart.map((item, idx) => `
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center">
+          <div class="max-w-[170px]">
+            <p class="text-xs font-bold text-slate-800 truncate">${item.medicine_name}</p>
+            <p class="text-[11px] text-slate-500 truncate">${item.display_unit} • ${item.unit_price.toFixed(2)} ETB</p>
+            <p class="text-xs font-black text-rose-800">${item.subtotal.toFixed(2)} ETB</p>
+          </div>
+          <div class="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg p-1 shadow-2xs">
+            <button type="button" onclick="updateCartItemQty(${idx}, -1)" class="w-6 h-6 flex items-center justify-center font-bold text-slate-600 hover:text-black bg-slate-100 rounded">-</button>
+            <input 
+              type="number" 
+              min="1" 
+              value="${item.quantity}" 
+              onchange="setCartItemQtyDirect(${idx}, this.value)"
+              onkeyup="if(event.key==='Enter') setCartItemQtyDirect(${idx}, this.value)"
+              class="w-14 text-center text-xs font-black text-slate-900 border border-slate-200 rounded py-1 px-0.5 focus:outline-none focus:ring-1 focus:ring-rose-500 bg-slate-50/50"
+              title="Type custom quantity"
+            />
+            <button type="button" onclick="updateCartItemQty(${idx}, 1)" class="w-6 h-6 flex items-center justify-center font-bold text-slate-600 hover:text-black bg-slate-100 rounded">+</button>
+          </div>
+        </div>
+      `).join('');
+
+      document.getElementById("cart-total-display").innerText = total.toFixed(2);
+      checkoutBtn.disabled = false;
+    }
+
+    function setPaymentMethod(method) {
+      currentPaymentMethod = method;
+      document.querySelectorAll(".pay-btn").forEach(btn => {
+        btn.classList.remove("bg-rose-700", "text-white", "border-rose-700");
+        btn.classList.add("bg-white", "text-slate-700", "border-slate-200");
+      });
+      const id = method === 'Cash' ? 'pay-cash' : (method === 'Telebirr' ? 'pay-telebirr' : 'pay-cbe');
+      document.getElementById(id).classList.remove("bg-white", "text-slate-700", "border-slate-200");
+      document.getElementById(id).classList.add("bg-rose-700", "text-white", "border-rose-700");
+    }
+
+    function initiateCheckoutFlow() {
+      const total = getCartTotal();
+      if (currentPaymentMethod === "Cash") {
+        executeFinalCheckout("Cash", null);
+      } else {
+        openQrPaymentModal(currentPaymentMethod, total);
+      }
+    }
+
+    function openQrPaymentModal(channel, amount) {
+      const target = document.getElementById("dynamic-qr-target");
+      target.innerHTML = "";
+
+      document.getElementById("qr-modal-title").innerText = `${channel} Payment`;
+      document.getElementById("qr-amount-display").innerText = `${amount.toFixed(2)} ETB`;
+      document.getElementById("qr-tx-ref-input").value = "";
+
+      let qrPayloadString = "";
+      if (channel === "Telebirr") {
+        qrPayloadString = `telebirr://pay?receiver=${MERCHANT_CONFIG.telebirr_code}&amount=${amount.toFixed(2)}&currency=ETB`;
+        document.getElementById("qr-merchant-tag").innerText = `Telebirr Merchant: ${MERCHANT_CONFIG.telebirr_code}`;
+      } else {
+        qrPayloadString = `cbebirr://transfer?account=${MERCHANT_CONFIG.cbe_account}&amount=${amount.toFixed(2)}`;
+        document.getElementById("qr-merchant-tag").innerText = `CBE Account: ${MERCHANT_CONFIG.cbe_account}`;
+      }
+
+      qrcodeInstance = new QRCode(target, {
+        text: qrPayloadString,
+        width: 170,
+        height: 170,
+        colorDark: channel === "Telebirr" ? "#047857" : "#581c87",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+      });
+
+      document.getElementById("qr-payment-modal").classList.remove("hidden");
+      document.getElementById("qr-payment-modal").classList.add("flex");
+    }
+
+    function closeQrPaymentModal() {
+      document.getElementById("qr-payment-modal").classList.add("hidden");
+      document.getElementById("qr-payment-modal").classList.remove("flex");
+    }
+
+    function confirmDigitalPayment() {
+      const txRef = document.getElementById("qr-tx-ref-input").value.trim();
+      closeQrPaymentModal();
+      executeFinalCheckout(currentPaymentMethod, txRef || "Confirmed-InStore");
+    }
+
+    async function executeFinalCheckout(paymentMethod, notes) {
+      const checkoutBtn = document.getElementById("checkout-btn");
+      checkoutBtn.disabled = true;
+
+      const payload = {
+        payment_method: paymentMethod,
+        notes: notes,
+        items: cart.map(i => ({ batch_id: i.batch_id, unit_type: i.unit_type, quantity: i.quantity }))
+      };
+
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      if (checkAuthError(res.status)) return;
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`Checkout Failed: ${err.detail || 'Error'}`);
+        checkoutBtn.disabled = false;
+        return;
+      }
+
+      const sale = await res.json();
+      document.getElementById("receipt-modal-inv").innerText = sale.invoice_number;
+      document.getElementById("receipt-modal-total").innerText = `${sale.total_amount.toFixed(2)} ETB`;
+      document.getElementById("receipt-modal-method").innerText = `${sale.payment_method} ${sale.notes ? '(' + sale.notes + ')' : ''}`;
+      
+      document.getElementById("receipt-modal").classList.remove("hidden");
+      document.getElementById("receipt-modal").classList.add("flex");
+
+      cart = [];
+      renderCart();
+      loadMedicines();
+      checkoutBtn.disabled = false;
+    }
+
+    function closeReceiptModal() {
+      document.getElementById("receipt-modal").classList.add("hidden");
+      document.getElementById("receipt-modal").classList.remove("flex");
+    }
+
+    function openAddMedicineModal() {
+      document.getElementById("add-med-modal").classList.remove("hidden");
+      document.getElementById("add-med-modal").classList.add("flex");
+      onDosageFormChange();
+    }
+    function closeAddMedicineModal() {
+      document.getElementById("add-med-modal").classList.add("hidden");
+      document.getElementById("add-med-modal").classList.remove("flex");
+    }
+
+    async function submitNewMedicine(e) {
+      e.preventDefault();
+      const payload = {
+        brand_name: document.getElementById("new-brand").value.trim(),
+        generic_name: document.getElementById("new-generic").value.trim() || null,
+        dosage: document.getElementById("new-dosage").value.trim() || null,
+        dosage_form: document.getElementById("new-form").value,
+        dispense_unit: document.getElementById("new-dispense-unit").value.trim() || "Unit",
+        units_per_subpack: parseInt(document.getElementById("new-subpack-units").value) || 1,
+        subpacks_per_outerpack: parseInt(document.getElementById("new-outerpack-subs").value) || 1,
+        batch_number: document.getElementById("new-batch-no").value.trim(),
+        expiry_date: document.getElementById("new-exp-date").value,
+        packages_received: parseInt(document.getElementById("new-packages-received").value) || 1,
+        cost_price_package: parseFloat(document.getElementById("new-package-cost").value) || 0,
+        price_per_dispense_unit: parseFloat(document.getElementById("new-unit-price").value) || 0
+      };
+
+      try {
+        const res = await fetch("/api/medicines/with-stock", {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(payload)
+        });
+
+        if (checkAuthError(res.status)) return;
+
+        if (res.ok) {
+          closeAddMedicineModal();
+          document.getElementById("add-med-form").reset();
+          loadMedicines();
+          alert("Product profile created and added to stock!");
+        } else {
+          const err = await res.json();
+          alert(`Failed to add product: ${JSON.stringify(err.detail || err)}`);
+        }
+      } catch (err) {
+        alert(`Network Error: ${err.message}`);
+      }
+    }
+
+    function openEditPriceModal(batchId, name, unitPrice, stripPrice, packPrice, unitName, hasStrip) {
+      document.getElementById("edit-batch-id").value = batchId;
+      document.getElementById("edit-med-title").innerText = `Product: ${name}`;
+      document.getElementById("edit-price-single-lbl").innerText = `Price per Single ${unitName} (ETB) *`;
+      document.getElementById("edit-price-unit").value = unitPrice;
+      document.getElementById("edit-price-strip").value = stripPrice || "";
+      document.getElementById("edit-price-pack").value = packPrice || "";
+
+      if (!hasStrip) {
+        document.getElementById("edit-strip-row").classList.add("hidden");
+      } else {
+        document.getElementById("edit-strip-row").classList.remove("hidden");
+      }
+
+      document.getElementById("edit-price-modal").classList.remove("hidden");
+      document.getElementById("edit-price-modal").classList.add("flex");
+    }
+    function closeEditPriceModal() {
+      document.getElementById("edit-price-modal").classList.add("hidden");
+      document.getElementById("edit-price-modal").classList.remove("flex");
+    }
+
+    async function savePriceChanges() {
+      const batchId = document.getElementById("edit-batch-id").value;
+      const unitPrice = parseFloat(document.getElementById("edit-price-unit").value);
+      const stripPriceVal = document.getElementById("edit-price-strip").value;
+      const packPriceVal = document.getElementById("edit-price-pack").value;
+
+      const payload = {
+        price_per_unit: unitPrice,
+        price_per_strip: stripPriceVal ? parseFloat(stripPriceVal) : null,
+        price_per_pack: packPriceVal ? parseFloat(packPriceVal) : null
+      };
+
+      const res = await fetch(`/api/batches/${batchId}/price`, {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      if (checkAuthError(res.status)) return;
+
+      if (res.ok) {
+        closeEditPriceModal();
+        loadMedicines();
+      } else {
+        alert("Failed to update prices.");
+      }
+    }
+
+    function onCalendarDateChange() { loadSalesForSelectedDate(); }
+    function resetToTodayDate() {
+      document.getElementById("calendar-date-picker").value = new Date().toISOString().split('T')[0];
+      loadSalesForSelectedDate();
+    }
+
+    async function loadSalesForSelectedDate() {
+      const dateVal = document.getElementById("calendar-date-picker").value;
+      const tbody = document.getElementById("sales-history-tbody");
+      const titleEl = document.getElementById("table-date-title");
+      const scopeEl = document.getElementById("label-revenue-scope");
+
+      if (dateVal) {
+        titleEl.innerText = `Transactions on ${dateVal}`;
+        scopeEl.innerText = `Sales on ${dateVal}`;
+      } else {
+        titleEl.innerText = "All Historical Transactions";
+        scopeEl.innerText = "All-Time Sales";
+      }
+
+      try {
+        const queryParam = dateVal ? `?target_date=${dateVal}` : "";
+        const [historyRes, summaryRes] = await Promise.all([
+          fetch(`/api/sales/history${queryParam}`),
+          fetch(`/api/sales/summary${queryParam}`)
+        ]);
+
+        const history = await historyRes.json();
+        const summary = await summaryRes.json();
+
+        document.getElementById("stat-total-revenue").innerText = `${summary.total_revenue.toFixed(2)} ETB`;
+        document.getElementById("stat-total-orders").innerText = `${summary.total_orders} orders on this date`;
+        document.getElementById("stat-cash").innerText = `${summary.cash_total.toFixed(2)} ETB`;
+        document.getElementById("stat-telebirr").innerText = `${summary.telebirr_total.toFixed(2)} ETB`;
+        document.getElementById("stat-cbe").innerText = `${summary.cbe_total.toFixed(2)} ETB`;
+
+        if (!history || history.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400 font-medium">No sales recorded on ${dateVal || 'this date'}.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = history.map(row => {
+          let badgeColor = "bg-slate-100 text-slate-800";
+          if (row.payment_method.includes('Telebirr')) badgeColor = "bg-emerald-100 text-emerald-800";
+          if (row.payment_method.includes('CBE')) badgeColor = "bg-purple-100 text-purple-800";
+
+          return `
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="p-3.5 font-mono font-bold text-slate-800">${row.invoice_number}</td>
+              <td class="p-3.5 text-slate-500 font-mono">${row.created_at}</td>
+              <td class="p-3.5 text-slate-700 max-w-xs truncate">${row.summary_items || 'N/A'}</td>
+              <td class="p-3.5">
+                <span class="px-2 py-0.5 rounded-md font-semibold text-[10px] ${badgeColor}">${row.payment_method}</span>
+                ${row.notes ? `<p class="text-[10px] text-slate-400 font-mono mt-0.5">Ref: ${row.notes}</p>` : ''}
+              </td>
+              <td class="p-3.5 text-right font-black text-slate-900">${row.total_amount.toFixed(2)}</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-rose-500 font-medium">Failed to load transactions.</td></tr>`;
+      }
+    }
+  </script>
+</body>
+</html>
